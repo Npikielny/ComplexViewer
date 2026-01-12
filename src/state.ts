@@ -44,7 +44,7 @@ int n_to_escape(vec2 coords, int max_n) {
         if (julia_trap(z)) {
             return i;
         }
-        z = complex_mul(z, z) + ${state.C};
+        z = complex_mul(z, z) + C;
     }
     return 0;
 }
@@ -125,6 +125,7 @@ precision highp float;
 in vec2 coords;
 out vec4 outColor;
 uniform vec2 resolution;
+uniform vec2 C;
 
 vec2 complex_mul(vec2 a, vec2 b) {
     return vec2(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x);
@@ -137,7 +138,6 @@ void main() {
     float c = 0.0;
     vec2 pixel_size = vec2(1.0) / vec2(float(resolution.x), float(resolution.y)) * ${pack_float(state.zoom)} * 2.f;
 
-    ${COMPRESSED ? "coords = compress(coords);" : ""}
     ${compile_samples(state)}
     c *= ${pack_float(1.0 / (state.antialising * state.antialising))};
 

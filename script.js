@@ -10,8 +10,12 @@ var state
 var vao
 var shaderProgram
 var gl
+
+var trap_ID
+
 function main() {
-    state = new State(new Vec2(0.3, 0.2), new Vec2(0.0, 0.0), ComplexMode.Julia, DEFAULT_COLORS, 1);
+  trap_ID = 0
+    state = new State(new Vec2(0.5, 0.2), new Vec2(0.0, 0.0), ComplexMode.Julia, DEFAULT_COLORS, 1);
     const canvas = document.querySelector("#gl");
 
     gl = canvas.getContext("webgl2", { antialias: false });
@@ -101,9 +105,22 @@ function main() {
         state.antialising = 1
         update()
         draw(gl, canvas)
+      } else if (e.code.includes("Digit")) {
+        const ID = parseInt(e.code[e.code.length - 1])
+        if (ID != undefined) {
+          if (ID == 0) {
+            trap_ID = 8
+          } else {
+            trap_ID = ID - 2
+          }
+          update()
+          draw(gl, canvas)
+        }
       } else if (e.code === 'Enter') {
         draw(gl, canvas)
         save(canvas, gl)
+      } else if (e.code === "KeyP") {
+        make_shader(true)
       }
       console.log(state.antialising, e.code)
     });
@@ -142,6 +159,12 @@ function draw(gl, canvas) {
     const uResolutionLoc = gl.getUniformLocation(shaderProgram, "resolution");
     gl.uniform2f(uResolutionLoc, canvas.width, canvas.height);
 
+    const CLoc = gl.getUniformLocation(shaderProgram, "C");
+    gl.uniform2f(CLoc, state.C.x, state.C.y);
+
+    const ZLoc = gl.getUniformLocation(shaderProgram, "Z");
+    gl.uniform2f(ZLoc, -state.Z.x, state.Z.y);
+
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 6);
 }
 
@@ -166,20 +189,61 @@ function resizeCanvas(gl, canvas) {
   draw(gl, canvas)
 }
 
+function get_trap() {
+  return [
+    new DistanceTrap(4.0, new Vec2()),
+    new CircleTrap(new Vec2(), 1.0, 0.005),
+    new LineTrap(new Vec2(3.0, 3.0), 1, 0.025),
+    new CombinationTrap(
+        new CircleTrap(new Vec2(), 1.0, 0.005),
+        new LineTrap(new Vec2(3.0, 3.0), 1, 0.025)
+    ),
+    new CombinationTrap(
+        new DistanceTrap(4.0, new Vec2()),
+        new LineTrap(new Vec2(3.0, 3.0), 1, 0.025)
+    ),
+    new CombinationTrap(
+        new CircleTrap(new Vec2(), 1.0, 0.005),
+        new DistanceTrap(4.0, new Vec2()),
+    ),
+    new CombinationTrap(
+        new CircleTrap(new Vec2(), 1.0, 0.005),
+        new CombinationTrap(
+          new DistanceTrap(4.0, new Vec2()),
+          new LineTrap(new Vec2(5.4, -2.3), 0.017, 0.025)
+      )
+    ),
+    new LineTrap(new Vec2(5.4, -2.3), 0.017, 0.025),
+    new LineTrap(new Vec2(5.4, -2.3), 1.7, 0.025),
+  ][trap_ID]
+}
+
 function write_shader() {
-    // var trap = new DistanceTrap(4.0, new Vec2())
-    var trap = new CircleTrap(new Vec2(), 1.0, 0.005);
-    // var trap = new LineTrap(new Vec2(3.0, 3.0), 1, 0.025);
-    // var trap = new CombinationTrap(
-    //     new CircleTrap(new Vec2(), 1.0, 0.005),
-    //     new LineTrap(new Vec2(3.0, 3.0), 1, 0.025)
-    // )
-    var x = generate_shader(trap, state);
-    return x;
+  const trap = get_trap();
+  return generate_shader(trap, state);
 }
 
 function attach_shader(gl) {
-    const vertex_shader = `#version 300 es
+  const shaders = make_shader(false);
+  const shaderProgram = gl.createProgram();
+  gl.attachShader(shaderProgram, loadShader(gl, gl.VERTEX_SHADER, shaders.vert));
+  gl.attachShader(shaderProgram, loadShader(gl, gl.FRAGMENT_SHADER, shaders.frag));
+  gl.linkProgram(shaderProgram);
+
+  if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+      alert(
+      `Unable to initialize the shader program: ${gl.getProgramInfoLog(
+          shaderProgram,
+      )}`,
+      );
+      return null;
+  }
+
+    return shaderProgram;
+}
+
+function make_shader(prints) {
+  const vertex_shader = `#version 300 es
 precision highp float;
 
 const vec2 corners[6] = vec2[](
@@ -191,33 +255,26 @@ const vec2 corners[6] = vec2[](
   vec2( 1.0,  1.0) 
 );
 
+uniform vec2 Z;
 out vec2 coords;
 
 void main() {
-    coords = corners[gl_VertexID] * ${pack_float(state.zoom)} + ${state.Z.scale2(new Vec2(-1, 1))};
+    coords = corners[gl_VertexID] * ${pack_float(state.zoom)} + Z;
     gl_Position = vec4(corners[gl_VertexID], 0.0, 1.0);
 }
     `;
-    console.log(vertex_shader)
-
     const fragment_shader = write_shader();
-    // console.log(fragment_shader);
 
-    const shaderProgram = gl.createProgram();
-    gl.attachShader(shaderProgram, loadShader(gl, gl.VERTEX_SHADER, vertex_shader));
-    gl.attachShader(shaderProgram, loadShader(gl, gl.FRAGMENT_SHADER, fragment_shader));
-    gl.linkProgram(shaderProgram);
-
-    if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
-        alert(
-        `Unable to initialize the shader program: ${gl.getProgramInfoLog(
-            shaderProgram,
-        )}`,
-        );
-        return null;
+    if (prints) {
+      console.log(
+        "Vertex Shader:",
+        vertex_shader,
+        "Fragment Shader:",
+        fragment_shader
+      )
     }
 
-    return shaderProgram;
+    return { vert: vertex_shader, frag: fragment_shader }
 }
 
 function save(canvas, gl) {
