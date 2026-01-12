@@ -11,7 +11,7 @@ var vao
 var shaderProgram
 var gl
 function main() {
-    state = new State(new Vec2(0.3, 0.2), new Vec2(0.0, 0.0), ComplexMode.mandelbrot, DEFAULT_COLORS, 1);
+    state = new State(new Vec2(0.3, 0.2), new Vec2(0.0, 0.0), ComplexMode.Julia, DEFAULT_COLORS, 1);
     const canvas = document.querySelector("#gl");
 
     gl = canvas.getContext("webgl2", { antialias: false });
